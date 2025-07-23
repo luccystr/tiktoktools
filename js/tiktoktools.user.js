@@ -11,12 +11,107 @@
 
 (function() {
     'use strict';
+    class NotifyDiv extends HTMLDivElement {
+        constructor(text) {
+            super();
+            this.timeout = null;
+            Object.assign(this.style, {
+                'display'   : 'flex',
+                'opacity'   : 0,
+                'color' : '#fafafa',
+                'overflow': 'hidden',
+                'font-size' : 'large',
+                'box-shadow'    : '-.5rem -.25rem .1rem #fafafa',
+                'border-radius' : '.5rem',
+                'user-select'   : 'none',
+                'flex-wrap'     : 'wrap',
+                'box-sizing'    : 'border-box',
+                'background-color'  : '#0a0a0a'
+            })
+
+            const text_div = document.createElement('div');
+            text_div.textContent = text;
+            Object.assign(text_div.style, {
+                'padding' : '.4rem 0 .4rem .6rem'
+            });
+
+            const close_btn = document.createElement('button');
+            close_btn.textContent = '×';
+            Object.assign(close_btn.style, {
+                'width' : 'min-width',
+                'color' : 'white',
+                'cursor'    : 'pointer',
+                'border'    : 'none',
+                'font-size' : 'large',
+                'padding'   : '0 .6rem',
+                'background'    : 'none',
+                'transition'    : '300ms'
+            });
+
+            close_btn.addEventListener('mouseover', () => close_btn.style.backgroundColor = '#ffffff50');
+            close_btn.addEventListener('mouseout', () => close_btn.style.backgroundColor = '#ffffff00');
+            close_btn.addEventListener('click', () => {this.remove_notification()});
+
+
+            const load_bar = document.createElement('div');
+            load_bar.classList.add('load_bar');
+            Object.assign(load_bar.style, {
+                'background-color'  : 'red',
+                'flex-basis'    : '100%',
+                'flex-grow' : '1',
+                'height'    : '.2rem',
+                'width' : '100%',
+                'max-width' : '0.1%',
+                'transition'    : '3000ms'
+            });
+
+            this.insertAdjacentElement('beforeend', text_div);
+            this.insertAdjacentElement('beforeend', close_btn);
+            this.insertAdjacentElement('beforeend', load_bar);
+        }
+
+        connectedCallback() {
+            this.animate([
+                {opacity: 0, transform: 'translateY(-10rem) scale(.8)'},
+                {opacity: 1, transform: 'translateY(0) scale(1)'}
+            ], {
+                duration: 300,
+                easing: 'ease-out',
+                fill: 'forwards'
+            }).finished
+            .then(() => {
+                const load = this.querySelector('.load_bar');
+                load.style.maxWidth = '100%';
+
+                return new Promise(resolve => this.timeout = setTimeout(resolve, 3000));
+            })
+            .then(() => this.remove_notification())
+        }
+
+        remove_notification() {
+            clearTimeout(this.timeout);
+            this.animate([
+                {opacity: 1, transform: 'translateX(0)'},
+                {opacity: 0, transform: 'translateX(-20rem)'}
+            ], {
+                duration: 300,
+                easing: 'ease-out',
+                fill: 'forwards'
+            }).finished
+            .then(() => this.remove());
+        }
+    }
+
+    customElements.define('notify-div', NotifyDiv, {extends: 'div'});
 
     let $var = {
         _altKey: false,
-        shortcut_activate: false,
-        fist_click: false,
+        _shortcut_activate: false,
+        first_click: false,
         double_click_timer: undefined,
+        text_box_selector:'div[contenteditable="plaintext-only"][placeholder]',
+        app_selector: '#app',
+        notify_box_selector: '#notify_tools_box',
 
         get altKey() {
             return this._altKey;
@@ -26,13 +121,69 @@
             this._altKey = new_value;
         },
 
+        get shortcut_activate(){
+            return this._shortcut_activate;
+        },
+        set shortcut_activate(new_value) {
+            this._shortcut_activate = new_value;
+
+            if(new_value === true) {
+                new_notification('Os atalhos de teclado foram ativados');
+            } else {
+                new_notification('Os atalhos de teclado foram desativados');
+            }
+        },
+
         get text_box() {
             return document.querySelector(this.text_box_selector) ?? undefined;
         },
+        
+        get app() {
+            return document.querySelector(this.app_selector) ?? undefined;
+        },
 
-        get text_box_selector() {
-            return 'div[contenteditable="plaintext-only"][placeholder^="Diga algo legal"]';
+        get notify_box() {
+            return document.querySelector(this.notify_box_selector) ?? undefined;
         }
+    }
+
+    function notification_tools() {
+        (function notify_box(){
+            const notify_box = document.createElement('div');
+            Object.assign(notify_box.style, {
+                'display'   : 'flex',
+                'flex-direction'    : 'column-reverse',
+                'justify-content'   :'flex-end',
+                'gap'   :'.5rem',
+                'left'  : '0',
+                'top'   : 0,
+                'width' : 'max-content',
+                'position'  : 'fixed',
+                'max-width' : '100svw',
+                'height'    : '100svh',
+                'padding'   : '.5rem 0 0 .5rem',
+                'align-items'   :'flex-start',
+                'max-height'    : '32rem'
+            });
+            notify_box.id = 'notify_tools_box';
+
+            $var.app.insertAdjacentElement('afterbegin', notify_box);
+        })()
+
+        function new_notification(text = undefined) {
+            if(text === undefined) {
+                console.error('Impossivel criar notificação, texto não foi definido');
+                return;
+            }
+
+            if($var.notify_box === undefined) {
+                console.error(`'${$var.notify_box_selector}' não foi encontrado`)
+            }
+
+            $var.notify_box.insertAdjacentElement('beforeend', new NotifyDiv(text));
+        }
+
+        window.new_notification = new_notification;
     }
 
     function fast_type_tool() {
@@ -66,13 +217,13 @@
         }
 
         document.addEventListener('keydown', (e) => {
+            console.log(e.code);
             if(e.code === "KeyL" && e.altKey) {
                 onDoubleClick(() => {
                     if($var.shortcut_activate === true) {
                         $var.shortcut_activate = false;
                         return;
                     }
-
                     $var.shortcut_activate = true;
                 });
 
@@ -92,7 +243,7 @@
         $var.text_box.addEventListener('input', blur_text_box);
     }
 
-    function waitElementAppears(selector, element = document.body, params = {childList: true, subtree: true} /*padrão*/) {
+    function waitElementAppears(selector, element = document.body, params = {childList: true, subtree: true}) {
         return new Promise(resolve => {
             new MutationObserver((list, obs) => {
                 if(document.querySelector(selector)) {
@@ -104,8 +255,14 @@
     }
 
     window.onload = function() {
-        console.clear();
         console.log('Comando injetado');
+        // notification_tools
+        if($var.app !== undefined) {
+            notification_tools();
+        } else {
+            waitElementAppears($var.app_selector).then(response => notification_tools());
+        }
+
         // fast_type_tools
         if($var.text_box !== undefined) {
             fast_type_tool();
